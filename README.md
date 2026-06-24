@@ -1,4 +1,4 @@
-# AskThePDF
+# PDF RAG
 
 A RAG-powered PDF Q&A application. Upload any PDF and ask questions about it in natural language. Built with FastAPI, LangChain, ChromaDB, Google Gemini, and a Streamlit UI.
 
