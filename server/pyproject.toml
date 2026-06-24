@@ -1,0 +1,22 @@
+[project]
+name = "askthepdf"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "streamlit>=1.45.0",
+    "requests>=2.32.0",
+    "chromadb>=1.5.9",
+    "fastapi[standard]>=0.136.1",
+    "langchain>=1.2.18",
+    "langchain-chroma>=1.1.0",
+    "langchain-community>=0.4.1",
+    "langchain-google-genai>=4.2.2",
+    "langchain-huggingface>=1.2.2",
+    "load-dotenv>=0.1.0",
+    "pydantic>=2.13.4",
+    "pypdf>=6.11.0",
+    "sentence-transformers>=5.5.0",
+    "tiktoken>=0.12.0",
+]
