@@ -1,6 +1,6 @@
 # PDF RAG
 
-A RAG-powered PDF Q&A application. Upload any PDF and ask questions about it in natural language. Built with FastAPI, LangChain, ChromaDB, Google Gemini, and a Streamlit UI.
+A RAG-powered PDF Q&A application. Upload any PDF and ask questions about it in natural language. Built with FastAPI, LangChain, ChromaDB, Google Gemini, and a Streamlit UI. Integrated with LangSmith for tracing and evaluation.
 
 ---
 
@@ -18,10 +18,15 @@ A RAG-powered PDF Q&A application. Upload any PDF and ask questions about it in 
                           ┌───────────────────────┼───────────────────────┐
                           │                       │                       │
                    ┌──────▼──────┐       ┌────────▼───────┐     ┌────────▼───────┐
-                   │  ChromaDB   │       │  HuggingFace   │     │  Gemini 2.5    │
-                   │ Vector Store│       │  MiniLM-L6-v2  │     │  Flash (LLM)   │
-                   │ (local)     │       │  (embeddings)  │     │                │
+                   │  ChromaDB   │       │  HuggingFace   │     │ Gemini 3.5     │
+                   │ Vector Store│       │  MiniLM-L6-v2  │     │ Flash Lite     │
+                   │ (local)     │       │  (embeddings)  │     │ (LLM)          │
                    └─────────────┘       └────────────────┘     └────────────────┘
+                                                  │
+                                         ┌────────▼───────┐
+                                         │   LangSmith    │
+                                         │ tracing + eval │
+                                         └────────────────┘
 ```
 
 **RAG Flow:**
@@ -29,6 +34,7 @@ A RAG-powered PDF Q&A application. Upload any PDF and ask questions about it in 
 2. On each question, MMR retrieval fetches the top 8 relevant chunks
 3. Chunks + chat history are passed to Gemini via a customizable system prompt
 4. Answer and source chunks are returned to the UI
+5. Every request is traced in LangSmith (question → retrieval → LLM → answer)
 
 ---
 
@@ -38,6 +44,7 @@ A RAG-powered PDF Q&A application. Upload any PDF and ask questions about it in 
 server/
 ├── main.py                        # FastAPI app, CORS, lifespan (startup/shutdown cleanup)
 ├── streamlit_app.py               # Streamlit frontend
+├── evaluate.py                    # LangSmith evaluation script
 ├── pyproject.toml                 # Dependencies (uv)
 ├── .env                           # Environment variables (not committed)
 │
@@ -47,7 +54,7 @@ server/
 │   ├── routes/
 │   │   └── route.py               # API route handlers
 │   └── services/
-│       ├── chain.py               # RAG chain assembly
+│       ├── chain.py               # RAG chain assembly + LangSmith run naming
 │       ├── embedding.py           # Embeddings, ChromaDB client, vector store (singletons)
 │       ├── llm.py                 # Gemini model init + dynamic prompt builder
 │       ├── load_document.py       # PDF loading + text splitting
@@ -62,7 +69,8 @@ server/
 
 - [uv](https://docs.astral.sh/uv/getting-started/installation/) — Python package manager
 - Python 3.13+
-- A Google AI Studio API key → [Get one here](https://aistudio.google.com/apikey)
+- Google AI Studio API key → [Get one here](https://aistudio.google.com/apikey)
+- LangSmith API key → [Get one here](https://smith.langchain.com) (Settings → API Keys)
 
 ---
 
@@ -78,6 +86,11 @@ cd server
 
 ```env
 GOOGLE_API_KEY=your_google_api_key_here
+
+# LangSmith tracing
+LANGCHAIN_TRACING_V2=true
+LANGCHAIN_API_KEY=your_langsmith_api_key_here
+LANGCHAIN_PROJECT=AskThePDF
 ```
 
 **3. Install dependencies**
@@ -201,6 +214,32 @@ Health checks. `/health` also reports ChromaDB status.
 
 ---
 
+## LangSmith Tracing & Evaluation
+
+Every chat request is automatically traced in LangSmith as an `AskThePDF-RAG` run, showing the full pipeline: question → retrieved chunks → prompt → Gemini → answer.
+
+### Running the Evaluation
+
+1. Start the FastAPI server
+2. Upload your PDF via the Streamlit UI
+3. Run the evaluation script:
+
+```bash
+uv run python evaluate.py
+```
+
+This creates a dataset in LangSmith, runs your Q&A pairs through the live RAG pipeline, and scores each answer on:
+- **grounded** — did the model answer from the PDF or refuse?
+- **relevance** — keyword overlap between the answer and the expected output
+
+Results appear under Experiments at [smith.langchain.com](https://smith.langchain.com).
+
+![LangSmith Evaluation Results](./Screenshot.png)
+
+> Edit the `QA_PAIRS` list in `evaluate.py` to match your PDF's content before running.
+
+---
+
 ## Configuration
 
 ### Changing the LLM
@@ -210,8 +249,8 @@ Edit `app/services/llm.py`:
 ```python
 def get_model():
     return init_chat_model(
-        model="gemini-2.5-flash",      # change model here
-        model_provider="google_genai", # or "openai", "anthropic", etc.
+        model="gemini-3.5-flash-lite",  # change model here
+        model_provider="google_genai",  # or "openai", "anthropic", etc.
         temperature=0.3,
     )
 ```
@@ -232,8 +271,8 @@ Edit `app/services/retriever.py`:
 
 ```python
 return get_vector_store().as_retriever(
-    search_type="mmr",               # "mmr" for diversity, "similarity" for pure relevance
-    search_kwargs={"k": 8, "fetch_k": 20},  # k = chunks returned, fetch_k = candidates
+    search_type="mmr",                    # "mmr" for diversity, "similarity" for pure relevance
+    search_kwargs={"k": 8, "fetch_k": 20} # k = chunks returned, fetch_k = candidates
 )
 ```
 
@@ -256,7 +295,7 @@ When the FastAPI server shuts down (Ctrl+C), it automatically:
 - Deletes the `uploads/` directory
 - Resets the ChromaDB vector store
 
-This keeps the environment clean between sessions. If you want to persist embeddings across restarts, remove the cleanup logic from the `lifespan` handler in `main.py`.
+This keeps the environment clean between sessions. To persist embeddings across restarts, remove the cleanup logic from the `lifespan` handler in `main.py`.
 
 ---
 
@@ -265,4 +304,7 @@ This keeps the environment clean between sessions. If you want to persist embedd
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `GOOGLE_API_KEY` | yes | Google AI Studio API key for Gemini |
+| `LANGCHAIN_TRACING_V2` | no | Set to `true` to enable LangSmith tracing |
+| `LANGCHAIN_API_KEY` | no | LangSmith API key |
+| `LANGCHAIN_PROJECT` | no | LangSmith project name (default: `AskThePDF`) |
 | `HF_TOKEN` | no | HuggingFace token for higher rate limits on model downloads |

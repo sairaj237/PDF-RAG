@@ -1,5 +1,6 @@
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.chat_models import init_chat_model
+from langchain_core.runnables import RunnableWithFallbacks
 
 DEFAULT_SYSTEM_PROMPT = """You are a helpful PDF Q&A assistant. Follow these rules:
 
@@ -16,9 +17,10 @@ Context from PDF:
 
 def get_model():
     return init_chat_model(
-        model="gemini-2.5-flash",
+        model="gemini-3.5-flash-lite",
         model_provider="google_genai",
         temperature=0.3,
+        max_retries=3,
     )
 
 

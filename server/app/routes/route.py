@@ -4,6 +4,7 @@ import shutil
 import logging
 
 from fastapi import APIRouter, File, UploadFile, HTTPException
+from langchain_core.messages import HumanMessage, AIMessage
 
 from app.models.user import ChatRequest, ChatResponse, SourceDocument
 from app.services.embedding import store_pdf_embeddings, get_chroma_client, reset_vector_store
@@ -78,16 +79,16 @@ async def chat(data: ChatRequest):
 
     try:
         rag_chain = get_rag_chain(data.system_prompt)
-        answer = rag_chain.invoke({
-            "question": data.message,
-            "chat_history": chat_history,
-        })
+        run_id = str(uuid.uuid4())
+        answer = rag_chain.invoke(
+            {"question": data.message, "chat_history": chat_history},
+            config={"run_id": run_id},
+        )
     except Exception as e:
         logger.error("RAG chain error: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to generate answer: {e}")
 
     # Append this exchange to the session's chat history
-    from langchain_core.messages import HumanMessage, AIMessage
     chat_history.append(HumanMessage(content=data.message))
     chat_history.append(AIMessage(content=answer))
     _chat_histories[session_id] = chat_history

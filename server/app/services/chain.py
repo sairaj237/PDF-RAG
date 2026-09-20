@@ -1,5 +1,5 @@
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnablePassthrough
+from langchain_core.runnables import RunnablePassthrough, RunnableConfig
 from typing import Optional
 
 from app.services.llm import get_model, build_prompt
@@ -15,7 +15,7 @@ def get_rag_chain(system_prompt: Optional[str] = None):
     model = get_model()
     prompt = build_prompt(system_prompt)
 
-    return (
+    chain = (
         RunnablePassthrough.assign(
             context=lambda x: format_docs(retriever.invoke(x["question"]))
         )
@@ -23,3 +23,6 @@ def get_rag_chain(system_prompt: Optional[str] = None):
         | model
         | StrOutputParser()
     )
+
+    # Wrap with a name so LangSmith groups each Q&A as one named trace
+    return chain.with_config(RunnableConfig(run_name="AskThePDF-RAG"))

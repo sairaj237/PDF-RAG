@@ -111,6 +111,7 @@ else:
                 answer = data.get("answer", "No answer returned.")
                 st.markdown(answer)
 
+                # Show sources in an expander
                 sources = data.get("sources", [])
                 if sources:
                     with st.expander("Sources", expanded=False):
